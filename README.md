@@ -77,16 +77,34 @@ When code evolves but documentation remains static:
 ```bash
 git clone https://github.com/SakshamBist/documentation-drift-detector.git
 cd documentation-drift-detector
-pip install -r requirements.txt
+pip3 install -r requirements.txt
 ```
 
-### Run Locally
+### Run Locally (CLI)
 ```bash
-# Detect drift between current branch and main
-python -m docdrift analyze --base main --head HEAD
+# Check documentation against code for drift
+python3 -m docdrift.cli check --code examples/scenario_1_param_rename/client.py --docs examples/scenario_1_param_rename/README.md
 
-# Run on a specific documentation file and source file
-python -m docdrift check --doc README.md --code src/
+# ⚡ 1-Click Auto-Fix documentation on disk
+python3 -m docdrift.cli fix --code examples/scenario_1_param_rename/client.py --docs examples/scenario_1_param_rename/README.md
+```
+
+### Use as a GitHub Action in Any Repository
+Add `.github/workflows/docdrift.yml` to your repo:
+```yaml
+name: DocDrift
+on: [pull_request]
+
+jobs:
+  check-drift:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: SakshamBist/documentation-drift-detector@main
+        with:
+          code-path: '.'
+          docs-path: 'README.md'
+          fail-on-breaking: 'true'
 ```
 
 ---
