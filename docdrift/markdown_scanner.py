@@ -135,8 +135,8 @@ class MarkdownScanner:
         return params, defaults
 
     def _extract_cli_flags(self, text: str) -> List[str]:
-        """Extract CLI flags like --timeout, --deadline, -v from documentation."""
-        flags = re.findall(r"(`--[a-zA-Z0-9_-]+`|--[a-zA-Z0-9_-]+)", text)
+        """Extract CLI flags like --timeout, --deadline from documentation (excluding markdown rules ---)."""
+        flags = re.findall(r"(`--[a-zA-Z][a-zA-Z0-9_-]*`|--[a-zA-Z][a-zA-Z0-9_-]*)", text)
         clean_flags = [f.strip("`") for f in flags]
         return list(set(clean_flags))
 
