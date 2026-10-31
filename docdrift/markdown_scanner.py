@@ -1,14 +1,14 @@
-"""Markdown scanner for extracting symbol mentions, parameter tables, and doc sections."""
+"""Markdown scanner for extracting symbol mentions, CLI flags, default values, and parameter tables."""
 
 import re
 from pathlib import Path
-from typing import Dict, List, Union
+from typing import Dict, List, Tuple, Union
 
 from docdrift.models import DocSection
 
 
 class MarkdownScanner:
-    """Parses markdown files to locate symbol documentation and parameter tables."""
+    """Parses markdown files to locate symbol documentation, CLI usage, and parameter tables."""
 
     def scan_content(self, content: str, file_path: str = "<memory>") -> List[DocSection]:
         """Scan raw markdown string and return structured DocSections."""
@@ -19,14 +19,18 @@ class MarkdownScanner:
         current_heading_line = 1
         current_lines: List[str] = []
 
-        subheading_names = {"parameters", "arguments", "args", "params", "returns", "return", "example", "examples", "usage"}
+        subheading_names = {
+            "parameters", "arguments", "args", "params", "returns", "return",
+            "example", "examples", "usage", "cli", "flags", "options"
+        }
 
         def flush_section(heading: str, h_line: int, lines_accum: List[str]):
             if not lines_accum:
                 return
             sec_text = "\n".join(lines_accum)
             code_blocks = self._extract_code_blocks(sec_text)
-            params = self._extract_parameters(sec_text)
+            params, defaults = self._extract_parameters_and_defaults(sec_text)
+            cli_flags = self._extract_cli_flags(sec_text)
             symbols = self._extract_mentioned_symbols(sec_text, params)
 
             sections.append(
@@ -37,7 +41,9 @@ class MarkdownScanner:
                     content=sec_text,
                     code_blocks=code_blocks,
                     documented_params=params,
+                    documented_defaults=defaults,
                     mentioned_symbols=symbols,
+                    mentioned_cli_flags=cli_flags,
                 )
             )
 
@@ -45,7 +51,6 @@ class MarkdownScanner:
             heading_match = re.match(r"^(#{1,6})\s+(.+)$", line)
             if heading_match:
                 new_heading = heading_match.group(2).strip()
-                # Clean clean markdown backticks from heading name for check
                 clean_name = re.sub(r"[`()]", "", new_heading).strip().lower()
 
                 # If this is a minor subheading (like ### Parameters) under a function doc, merge with current section
@@ -76,7 +81,7 @@ class MarkdownScanner:
             return []
 
     def scan_directory(self, dir_path: Union[str, Path]) -> List[DocSection]:
-        """Scan all markdown files in a directory."""
+        """Scan all markdown files in a directory or single file."""
         p = Path(dir_path)
         sections: List[DocSection] = []
 
@@ -96,19 +101,24 @@ class MarkdownScanner:
         blocks = re.findall(r"```[a-zA-Z0-9_-]*\n(.*?)```", text, re.DOTALL)
         return [b.strip() for b in blocks if b.strip()]
 
-    def _extract_parameters(self, text: str) -> Dict[str, str]:
-        """Extract parameter names and descriptions from tables and bullet lists."""
+    def _extract_parameters_and_defaults(self, text: str) -> Tuple[Dict[str, str], Dict[str, str]]:
+        """Extract parameter names, descriptions, and documented default values."""
         params: Dict[str, str] = {}
+        defaults: Dict[str, str] = {}
 
         # 1. Match Markdown table rows: | `param` | description | or | param | type | desc |
         table_rows = re.findall(r"^\|?\s*`?([a-zA-Z_][a-zA-Z0-9_]*)`?\s*\|([^|\n]+)\|?(.*)$", text, re.MULTILINE)
         for row in table_rows:
             p_name = row[0].strip()
-            # Ignore table headers
             if p_name.lower() in ("parameter", "param", "argument", "arg", "field", "name", "variable"):
                 continue
             desc = (row[1] + " " + row[2]).strip(" |")
             params[p_name] = desc
+
+            # Check for default in description (e.g. default: 30, defaults to 30, default=None)
+            def_match = re.search(r"(?:default(?:s to|\s*[:=]))\s*`?([a-zA-Z0-9_.-]+)`?", desc, re.IGNORECASE)
+            if def_match:
+                defaults[p_name] = def_match.group(1).strip()
 
         # 2. Match Bullet points: - `param_name`: description or * `param_name` (type): description
         bullet_matches = re.findall(
@@ -118,12 +128,20 @@ class MarkdownScanner:
         )
         for p_name, desc in bullet_matches:
             params[p_name] = desc.strip()
+            def_match = re.search(r"(?:default(?:s to|\s*[:=]))\s*`?([a-zA-Z0-9_.-]+)`?", desc, re.IGNORECASE)
+            if def_match:
+                defaults[p_name] = def_match.group(1).strip()
 
-        return params
+        return params, defaults
+
+    def _extract_cli_flags(self, text: str) -> List[str]:
+        """Extract CLI flags like --timeout, --deadline, -v from documentation."""
+        flags = re.findall(r"(`--[a-zA-Z0-9_-]+`|--[a-zA-Z0-9_-]+)", text)
+        clean_flags = [f.strip("`") for f in flags]
+        return list(set(clean_flags))
 
     def _extract_mentioned_symbols(self, text: str, params: Dict[str, str]) -> List[str]:
         """Find functions or methods mentioned in text or code snippets."""
-        # Functions mentioned with parens: `func_name()` or def func_name(
         explicit_funcs = re.findall(r"`([a-zA-Z_][a-zA-Z0-9_]*)\(\)`", text)
         def_funcs = re.findall(r"def\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*\(", text)
         func_calls = re.findall(r"\b([a-zA-Z_][a-zA-Z0-9_]*)\s*\(", text)
@@ -134,10 +152,8 @@ class MarkdownScanner:
         heading_matches = re.findall(r"#{1,6}\s*`?([a-zA-Z_][a-zA-Z0-9_]*)(?:\(\))?`?", text)
         all_symbols.update(heading_matches)
 
-        # Do not treat parameters as function symbols
         all_symbols -= set(params.keys())
 
-        # Filter out common english words or python builtins
         ignored = {
             "def", "class", "import", "return", "from", "if", "for", "while",
             "true", "false", "none", "print", "str", "int", "bool", "dict",

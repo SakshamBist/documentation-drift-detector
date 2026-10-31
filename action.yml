@@ -14,6 +14,10 @@ inputs:
     description: 'Path to markdown documentation file or folder'
     required: false
     default: 'README.md'
+  diff:
+    description: 'Git diff range (e.g. HEAD~1 or origin/main...HEAD) to only analyze symbols modified in PR'
+    required: false
+    default: ''
   format:
     description: 'Output format (text, markdown, json)'
     required: false
@@ -40,6 +44,11 @@ runs:
     - name: Run DocDrift Guard
       shell: bash
       run: |
+        DIFF_FLAG=""
+        if [ -n "${{ inputs.diff }}" ]; then
+          DIFF_FLAG="--diff ${{ inputs.diff }}"
+        fi
+
         FAIL_FLAG=""
         if [ "${{ inputs.fail-on-breaking }}" = "true" ]; then
           FAIL_FLAG="--fail-on-breaking"
@@ -49,4 +58,4 @@ runs:
           --code "${{ inputs.code-path }}" \
           --docs "${{ inputs.docs-path }}" \
           --format "${{ inputs.format }}" \
-          $FAIL_FLAG
+          $DIFF_FLAG $FAIL_FLAG
