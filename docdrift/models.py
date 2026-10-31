@@ -1,0 +1,113 @@
+"""Data models for DocDrift."""
+
+from enum import Enum
+from typing import Dict, List, Optional
+from pydantic import BaseModel, Field
+
+
+class DriftSeverity(str, Enum):
+    """Severity levels for documentation drift."""
+    BREAKING = "BREAKING"     # e.g., argument removed or renamed
+    WARNING = "WARNING"       # e.g., return type changed, default value changed
+    COSMETIC = "COSMETIC"     # e.g., minor phrasing or formatting discrepancy
+
+
+class DriftType(str, Enum):
+    """Categorized types of drift."""
+    PARAM_MISMATCH = "PARAM_MISMATCH"
+    RETURN_TYPE_MISMATCH = "RETURN_TYPE_MISMATCH"
+    DEPRECATED_STILL_DOCUMENTED = "DEPRECATED_STILL_DOCUMENTED"
+    UNDOCUMENTED_NEW_FEATURE = "UNDOCUMENTED_NEW_FEATURE"
+    STALE_CODE_EXAMPLE = "STALE_CODE_EXAMPLE"
+
+
+class ParameterInfo(BaseModel):
+    """Metadata about a function or method parameter."""
+    name: str
+    type_annotation: Optional[str] = None
+    default_value: Optional[str] = None
+
+
+class CodeSymbol(BaseModel):
+    """Representation of an extracted code symbol (function, method, class)."""
+    name: str
+    symbol_type: str = "function"  # function, method, class
+    file_path: str
+    line_number: int
+    parameters: List[ParameterInfo] = Field(default_factory=list)
+    return_type: Optional[str] = None
+    docstring: Optional[str] = None
+
+    def param_names(self) -> List[str]:
+        return [p.name for p in self.parameters if p.name not in ("self", "cls")]
+
+
+class DocSection(BaseModel):
+    """Representation of a markdown section or parameter table."""
+    file_path: str
+    heading: str
+    line_number: int
+    content: str
+    code_blocks: List[str] = Field(default_factory=list)
+    documented_params: Dict[str, str] = Field(default_factory=dict)
+    mentioned_symbols: List[str] = Field(default_factory=list)
+
+
+class DriftIssue(BaseModel):
+    """A detected documentation drift incident."""
+    symbol_name: str
+    file_code: str
+    file_doc: str
+    severity: DriftSeverity
+    drift_type: DriftType
+    description: str
+    code_snippet: Optional[str] = None
+    doc_snippet: Optional[str] = None
+    suggested_fix: Optional[str] = None
+
+
+class DriftReport(BaseModel):
+    """Aggregated report of documentation drift across the repository."""
+    total_symbols_analyzed: int = 0
+    total_docs_analyzed: int = 0
+    issues: List[DriftIssue] = Field(default_factory=list)
+
+    @property
+    def is_clean(self) -> bool:
+        return len(self.issues) == 0
+
+    @property
+    def breaking_count(self) -> int:
+        return sum(1 for i in self.issues if i.severity == DriftSeverity.BREAKING)
+
+    @property
+    def warning_count(self) -> int:
+        return sum(1 for i in self.issues if i.severity == DriftSeverity.WARNING)
+
+    def to_markdown(self) -> str:
+        """Render report as GitHub Flavored Markdown for PR comments."""
+        if self.is_clean:
+            return "### ✅ DocDrift: All Documentation is In Sync with Code!\n\nNo documentation drift detected."
+
+        md = [
+            "### ⚠️ DocDrift: Documentation Drift Detected\n",
+            f"**Summary:** Found **{len(self.issues)} drift issues** "
+            f"({self.breaking_count} Critical/Breaking, {self.warning_count} Warnings).\n",
+            "| Severity | Drift Type | Symbol | Code File | Doc File | Description |",
+            "| :--- | :--- | :--- | :--- | :--- | :--- |"
+        ]
+
+        for issue in self.issues:
+            badge = "🔴 BREAKING" if issue.severity == DriftSeverity.BREAKING else "🟡 WARNING"
+            md.append(
+                f"| **{badge}** | `{issue.drift_type.value}` | `{issue.symbol_name}` | "
+                f"`{issue.file_code}` | `{issue.file_doc}` | {issue.description} |"
+            )
+
+        md.append("\n#### Suggested Documentation Fixes:\n")
+        for i, issue in enumerate(self.issues, 1):
+            if issue.suggested_fix:
+                md.append(f"**Issue {i}: `{issue.symbol_name}`**")
+                md.append(f"```suggestion\n{issue.suggested_fix}\n```\n")
+
+        return "\n".join(md)
