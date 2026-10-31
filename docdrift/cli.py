@@ -1,4 +1,4 @@
-"""Command line interface for DocDrift."""
+"""Command line interface for DocDrift Documentation Drift Detector."""
 
 import argparse
 import json
@@ -6,7 +6,6 @@ import sys
 from pathlib import Path
 
 from docdrift import __version__
-from docdrift.auto_fixer import AutoFixer
 from docdrift.drift_detector import DriftDetector
 
 
@@ -40,35 +39,10 @@ def main():
         help="Output format (default: text)",
     )
     check_parser.add_argument(
-        "--apply",
-        action="store_true",
-        help="Automatically apply fixes to documentation files on disk",
-    )
-    check_parser.add_argument(
         "--fail-on-breaking",
         action="store_true",
         default=True,
         help="Exit with code 1 if breaking drift is detected (default: True)",
-    )
-
-    # Command: fix
-    fix_parser = subparsers.add_parser("fix", help="Automatically synchronize documentation with code")
-    fix_parser.add_argument(
-        "--code",
-        default=".",
-        help="Path to Python codebase or file (default: current directory)",
-    )
-    fix_parser.add_argument(
-        "--docs",
-        "--doc",
-        dest="docs",
-        default="README.md",
-        help="Path to markdown documentation file or directory (default: README.md)",
-    )
-    fix_parser.add_argument(
-        "--backup",
-        action="store_true",
-        help="Create .bak backup files before modifying markdown documentation",
     )
 
     args = parser.parse_args()
@@ -77,56 +51,41 @@ def main():
         parser.print_help()
         sys.exit(0)
 
-    detector = DriftDetector()
-
-    if args.command in ("check", "fix"):
+    if args.command == "check":
+        detector = DriftDetector()
         report = detector.analyze(code_path=args.code, docs_path=args.docs)
 
-        # Handle automated fixes if fix command or --apply was given
-        if args.command == "fix" or (args.command == "check" and getattr(args, "apply", False)):
-            if report.is_clean:
-                print("✅ All documentation is already in sync with codebase. No fixes needed!")
-                sys.exit(0)
-
-            fixer = AutoFixer()
-            backup = getattr(args, "backup", False)
-            results = fixer.fix_issues(report.issues, code_path=args.code, backup=backup)
-
-            print(f"\n⚡ DocDrift Auto-Fix Applied (v{__version__})")
-            print("=" * 60)
-            for doc_file, count in results:
-                print(f"  • Updated {doc_file}: {count} parameter/return type synchronization(s)")
-            print("=" * 60)
-            print("✅ All documentation files successfully synchronized with code!")
-            sys.exit(0)
-
-        # Regular check output
+        # Output formatting
         if args.format == "json":
             print(json.dumps(report.model_dump(), indent=2))
         elif args.format == "markdown":
             print(report.to_markdown())
         else:
-            # Clean human-readable text format
+            # Clean human-readable terminal format
             print(f"\n🔍 DocDrift Analysis Report (v{__version__})")
-            print("=" * 60)
+            print("=" * 65)
             print(f"Code Symbols Analyzed : {report.total_symbols_analyzed}")
             print(f"Doc Sections Analyzed : {report.total_docs_analyzed}")
             print(f"Total Drift Issues    : {len(report.issues)}")
-            print("-" * 60)
+            print("-" * 65)
 
             if report.is_clean:
                 print("✅ All documentation is fully in sync with codebase!")
             else:
                 for i, issue in enumerate(report.issues, 1):
                     badge = "🔴 BREAKING" if issue.severity.value == "BREAKING" else "🟡 WARNING"
+                    code_loc = f"{issue.file_code}:{issue.line_code}" if issue.line_code else issue.file_code
+                    doc_loc = f"{issue.file_doc}:{issue.line_doc}" if issue.line_doc else issue.file_doc
                     print(f"\n[{i}] {badge}: {issue.symbol_name} ({issue.drift_type.value})")
-                    print(f"    Code File: {issue.file_code}")
-                    print(f"    Doc File : {issue.file_doc}")
-                    print(f"    Details  : {issue.description}")
+                    print(f"    Code Location : {code_loc}")
+                    print(f"    Doc Location  : {doc_loc}")
+                    print(f"    Details       : {issue.description}")
                     if issue.suggested_fix:
-                        print(f"    Suggested Fix:\n    {issue.suggested_fix}")
+                        print("    Suggested Fix :")
+                        for fix_line in issue.suggested_fix.splitlines():
+                            print(f"      {fix_line}")
 
-            print("=" * 60)
+            print("=" * 65)
 
         if args.fail_on_breaking and report.breaking_count > 0:
             sys.exit(1)

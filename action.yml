@@ -22,10 +22,6 @@ inputs:
     description: 'Whether to exit with code 1 if breaking drift is detected'
     required: false
     default: 'true'
-  apply-fixes:
-    description: 'Automatically apply fixes to documentation files'
-    required: false
-    default: 'false'
 
 runs:
   using: 'composite'
@@ -44,11 +40,6 @@ runs:
     - name: Run DocDrift Guard
       shell: bash
       run: |
-        APPLY_FLAG=""
-        if [ "${{ inputs.apply-fixes }}" = "true" ]; then
-          APPLY_FLAG="--apply"
-        fi
-
         FAIL_FLAG=""
         if [ "${{ inputs.fail-on-breaking }}" = "true" ]; then
           FAIL_FLAG="--fail-on-breaking"
@@ -58,4 +49,4 @@ runs:
           --code "${{ inputs.code-path }}" \
           --docs "${{ inputs.docs-path }}" \
           --format "${{ inputs.format }}" \
-          $APPLY_FLAG $FAIL_FLAG
+          $FAIL_FLAG

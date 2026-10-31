@@ -89,6 +89,8 @@ class DriftDetector:
                 symbol_name=symbol.name,
                 file_code=symbol.file_path,
                 file_doc=doc_section.file_path,
+                line_code=symbol.line_number,
+                line_doc=doc_section.line_number,
                 severity=DriftSeverity.WARNING,
                 drift_type=DriftType.RETURN_TYPE_MISMATCH,
                 description=(
@@ -118,6 +120,7 @@ class DriftDetector:
                             symbol_name=func_name,
                             file_code="<deleted>",
                             file_doc=sec.file_path,
+                            line_doc=sec.line_number,
                             severity=DriftSeverity.BREAKING,
                             drift_type=DriftType.DEPRECATED_STILL_DOCUMENTED,
                             description=(
