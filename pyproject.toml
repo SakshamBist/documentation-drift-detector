@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "docdrift"
+version = "0.1.0"
+description = "Automated documentation drift detector for open-source projects (Problem 5)."
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "MIT"}
+authors = [
+    {name = "BIG 4 (Saksham Bist, Kushal Singla, Krrish Raj, Rudra Sharma)"}
+]
+dependencies = [
+    "pydantic>=2.0.0",
+    "requests>=2.31.0"
+]
+
+[project.scripts]
+docdrift = "docdrift.cli:main"

@@ -6,6 +6,7 @@ import sys
 from pathlib import Path
 
 from docdrift import __version__
+from docdrift.auto_fixer import AutoFixer
 from docdrift.drift_detector import DriftDetector
 
 
@@ -27,6 +28,8 @@ def main():
     )
     check_parser.add_argument(
         "--docs",
+        "--doc",
+        dest="docs",
         default="README.md",
         help="Path to markdown documentation file or directory (default: README.md)",
     )
@@ -37,10 +40,35 @@ def main():
         help="Output format (default: text)",
     )
     check_parser.add_argument(
+        "--apply",
+        action="store_true",
+        help="Automatically apply fixes to documentation files on disk",
+    )
+    check_parser.add_argument(
         "--fail-on-breaking",
         action="store_true",
         default=True,
         help="Exit with code 1 if breaking drift is detected (default: True)",
+    )
+
+    # Command: fix
+    fix_parser = subparsers.add_parser("fix", help="Automatically synchronize documentation with code")
+    fix_parser.add_argument(
+        "--code",
+        default=".",
+        help="Path to Python codebase or file (default: current directory)",
+    )
+    fix_parser.add_argument(
+        "--docs",
+        "--doc",
+        dest="docs",
+        default="README.md",
+        help="Path to markdown documentation file or directory (default: README.md)",
+    )
+    fix_parser.add_argument(
+        "--backup",
+        action="store_true",
+        help="Create .bak backup files before modifying markdown documentation",
     )
 
     args = parser.parse_args()
@@ -49,10 +77,30 @@ def main():
         parser.print_help()
         sys.exit(0)
 
-    if args.command == "check":
-        detector = DriftDetector()
+    detector = DriftDetector()
+
+    if args.command in ("check", "fix"):
         report = detector.analyze(code_path=args.code, docs_path=args.docs)
 
+        # Handle automated fixes if fix command or --apply was given
+        if args.command == "fix" or (args.command == "check" and getattr(args, "apply", False)):
+            if report.is_clean:
+                print("✅ All documentation is already in sync with codebase. No fixes needed!")
+                sys.exit(0)
+
+            fixer = AutoFixer()
+            backup = getattr(args, "backup", False)
+            results = fixer.fix_issues(report.issues, code_path=args.code, backup=backup)
+
+            print(f"\n⚡ DocDrift Auto-Fix Applied (v{__version__})")
+            print("=" * 60)
+            for doc_file, count in results:
+                print(f"  • Updated {doc_file}: {count} parameter/return type synchronization(s)")
+            print("=" * 60)
+            print("✅ All documentation files successfully synchronized with code!")
+            sys.exit(0)
+
+        # Regular check output
         if args.format == "json":
             print(json.dumps(report.model_dump(), indent=2))
         elif args.format == "markdown":
