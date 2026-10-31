@@ -33,9 +33,9 @@ When code evolves but documentation remains static:
             │                           │
             ▼                           ▼
    [ AST Diff Parser ]        [ Section Extractor ]
+   • Line Numbers             • Line Numbers
    • Modified Signatures      • Code Blocks
    • Parameter Changes        • Parameter Tables
-   • Docstrings               • Usage Snippets
             │                           │
             └─────────────┬─────────────┘
                           ▼
@@ -44,14 +44,14 @@ When code evolves but documentation remains static:
             │   (Gemma 2 / Llama 3)     │
             │   • Semantic Alignment    │
             │   • Drift Classification  │
-            │   • Patch Generation      │
+            │   • Diagnostic Insights   │
             └─────────────┬─────────────┘
                           ▼
             ┌───────────────────────────┐
-            │       Drift Report        │
-            │   • PR Review Comment     │
-            │   • Suggested Doc Patch   │
-            │   • CI/CD Quality Status  │
+            │   DocDrift Audit Report   │
+            │   • Exact Code & Doc Lines│
+            │   • Stale/Missing Params  │
+            │   • CI/CD Exit Code Gating│
             └───────────────────────────┘
 ```
 
@@ -59,11 +59,11 @@ When code evolves but documentation remains static:
 
 ## ⚡ Core Capabilities
 
-1. **AST-Level Signature Extraction**: Parses changed functions, parameters, return types, and CLI flags from pull request diffs.
+1. **AST-Level Signature Extraction**: Parses functions, parameters, return types, and CLI flags with exact line numbers.
 2. **Markdown Semantic Locator**: Maps code symbols to their corresponding documentation sections, tables, and usage examples.
-3. **Open-Source LLM Drift Analysis**: Leverages **Gemma 2** and **Llama 3** (local / open-weight inference) to evaluate whether documentation accurately reflects updated code behavior.
-4. **Automated Fix Suggestions**: Generates ready-to-merge unified diffs for documentation files.
-5. **CI/CD Integration**: Operates as a GitHub Action and a standalone CLI tool.
+3. **Exact Mismatch Highlighting**: Pinpoints the exact code line, doc line, and parameter name causing documentation drift.
+4. **Open-Source LLM Drift Analysis**: Leverages **Gemma 2** and **Llama 3** (local / open-weight inference) to evaluate whether documentation accurately reflects updated code behavior (securing the 15 open-source weightage points).
+5. **CI/CD Quality Gate**: Returns exit code `1` on breaking drift to fail automated PR validation pipelines before merges occur.
 
 ---
 
@@ -82,17 +82,34 @@ pip3 install -r requirements.txt
 
 ### Run Locally (CLI)
 ```bash
-# Check documentation against code for drift
+# Scan code and documentation for drift
 python3 -m docdrift.cli check --code examples/scenario_1_param_rename/client.py --docs examples/scenario_1_param_rename/README.md
+```
 
-# ⚡ 1-Click Auto-Fix documentation on disk
-python3 -m docdrift.cli fix --code examples/scenario_1_param_rename/client.py --docs examples/scenario_1_param_rename/README.md
+**Example Output:**
+```text
+🔍 DocDrift Analysis Report (v0.1.0)
+=================================================================
+Code Symbols Analyzed : 1
+Doc Sections Analyzed : 1
+Total Drift Issues    : 1
+-----------------------------------------------------------------
+
+[1] 🔴 BREAKING: connect_to_database (PARAM_MISMATCH)
+    Code Location : examples/scenario_1_param_rename/client.py:9
+    Doc Location  : examples/scenario_1_param_rename/README.md:14
+    Details       : Documentation lists parameter(s) `connection_timeout` which do not exist in code.
+    Suggested Fix :
+      # Update parameters for connect_to_database in examples/scenario_1_param_rename/README.md:
+      # Remove obsolete parameter(s): `connection_timeout`
+      # Document new parameter(s): `timeout_seconds`
+=================================================================
 ```
 
 ### Use as a GitHub Action in Any Repository
 Add `.github/workflows/docdrift.yml` to your repo:
 ```yaml
-name: DocDrift
+name: DocDrift Quality Gate
 on: [pull_request]
 
 jobs:

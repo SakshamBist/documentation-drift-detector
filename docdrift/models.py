@@ -58,6 +58,8 @@ class DriftIssue(BaseModel):
     symbol_name: str
     file_code: str
     file_doc: str
+    line_code: Optional[int] = None
+    line_doc: Optional[int] = None
     severity: DriftSeverity
     drift_type: DriftType
     description: str
@@ -93,15 +95,17 @@ class DriftReport(BaseModel):
             "### ⚠️ DocDrift: Documentation Drift Detected\n",
             f"**Summary:** Found **{len(self.issues)} drift issues** "
             f"({self.breaking_count} Critical/Breaking, {self.warning_count} Warnings).\n",
-            "| Severity | Drift Type | Symbol | Code File | Doc File | Description |",
+            "| Severity | Drift Type | Symbol | Code Location | Doc Location | Description |",
             "| :--- | :--- | :--- | :--- | :--- | :--- |"
         ]
 
         for issue in self.issues:
             badge = "🔴 BREAKING" if issue.severity == DriftSeverity.BREAKING else "🟡 WARNING"
+            code_loc = f"`{issue.file_code}:{issue.line_code}`" if issue.line_code else f"`{issue.file_code}`"
+            doc_loc = f"`{issue.file_doc}:{issue.line_doc}`" if issue.line_doc else f"`{issue.file_doc}`"
             md.append(
                 f"| **{badge}** | `{issue.drift_type.value}` | `{issue.symbol_name}` | "
-                f"`{issue.file_code}` | `{issue.file_doc}` | {issue.description} |"
+                f"{code_loc} | {doc_loc} | {issue.description} |"
             )
 
         md.append("\n#### Suggested Documentation Fixes:\n")
